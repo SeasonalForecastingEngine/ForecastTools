@@ -27,7 +27,7 @@ ggplot_dt = function(dt,
                      data_col = colnames(dt)[3],
                      rr = NULL,
                      mn = NULL,
-                     colorscale = scale_fill_gradient2(low = "blue", mid = "white", high = "red",name = data_col),
+                     colorscale = scale_fill_gradient2(low = "blue", mid = "white", high = "red",name = data_col,limits = rr),
                      mapscale = 'large')
 {
   ####### transform data #######

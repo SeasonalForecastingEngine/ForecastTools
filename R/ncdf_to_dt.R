@@ -15,7 +15,7 @@
 #'
 #' @export
 
-ncdf_to_dt = function(nc,subset_list = NULL)
+ncdf_to_dt = function(nc,subset_list = NULL,printunits = TRUE)
 {
 
   if(is.character(nc)) nc = nc_open(nc)
@@ -100,8 +100,10 @@ ncdf_to_dt = function(nc,subset_list = NULL)
   }
 
   # printout units:
-  catout = paste0(c('Units:',units),sep = '',collapse = "\n")
-  cat(catout)
-
+  if(printunits)
+  {
+    catout = paste0(c('Units:',units),sep = '',collapse = "\n")
+    cat(catout)
+  }
   return(return_dt)
 }

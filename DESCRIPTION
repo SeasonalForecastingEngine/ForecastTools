@@ -8,6 +8,8 @@ Authors@R:
            email = "first.last@example.com",
            comment = c(ORCID = "YOUR-ORCID-ID"))
 Description: This package contains core functionality to be used by the two packages PostProcessing and SeaVal 
+Remotes:
+  github::ropensci/rnaturalearthhires
 Depends:
   data.table
 Imports:
@@ -17,6 +19,7 @@ Imports:
   maptools,
   ncdf4,
   rnaturalearth,
+  rnaturalearthhires,
   sp
 License: MIT
 Encoding: UTF-8

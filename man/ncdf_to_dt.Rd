@@ -4,7 +4,7 @@
 \alias{ncdf_to_dt}
 \title{function for converting netcdfs to long data tables.}
 \usage{
-ncdf_to_dt(nc, subset_list = NULL)
+ncdf_to_dt(nc, subset_list = NULL, printunits = TRUE)
 }
 \arguments{
 \item{nc}{either character string with the name of the .nc file (including path), or an object of type ncdf4}

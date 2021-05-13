@@ -10,7 +10,7 @@ ggplot_dt(
   rr = NULL,
   mn = NULL,
   colorscale = scale_fill_gradient2(low = "blue", mid = "white", high = "red", name =
-    data_col),
+    data_col, limits = rr),
   mapscale = "large"
 )
 }

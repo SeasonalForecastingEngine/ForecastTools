@@ -11,7 +11,8 @@ Description: This package contains core functionality to be used by the two pack
 Remotes:
   github::ropensci/rnaturalearthhires
 Depends:
-  data.table
+  data.table,
+  rnaturalearthhires
 Imports:
   fields,
   ggplot2,
@@ -19,7 +20,6 @@ Imports:
   maptools,
   ncdf4,
   rnaturalearth,
-  rnaturalearthhires,
   sp
 License: MIT
 Encoding: UTF-8

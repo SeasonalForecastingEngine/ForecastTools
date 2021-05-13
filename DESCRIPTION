@@ -1,5 +1,5 @@
 Package: ForecastTools
-Title: What the Package Does (One Line, Title Case)
+Title: Some tools for forecasting
 Version: 0.0.0.9000
 Authors@R: 
     person(given = "First",
@@ -7,8 +7,18 @@ Authors@R:
            role = c("aut", "cre"),
            email = "first.last@example.com",
            comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
-License: What license it uses
+Description: This package contains core functionality to be used by the two packages PostProcessing and SeaVal 
+Depends:
+  data.table
+Imports:
+  fields,
+  ggplot2,
+  maps,
+  maptools,
+  ncdf4,
+  rnaturalearth,
+  sp
+License: MIT
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.0.2

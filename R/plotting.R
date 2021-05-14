@@ -1,22 +1,26 @@
 
 
-#' plotting function for precip fields
+#' plotting function for spatial data
 #'
-#' @description plots dat on a regular grid over a map.
+#' @description Plots spatial data from a data.table. The data table needs to contain columns named 'lon' and 'lat'. The grid needs to be regular.
+#' The function runs a crude check whether the data is tempo-spatial. If it is, the time-slice of the first row is used.
 #'
-#' @param dt Data table containing columns lon, lat and the data. The data defaults to the third column. If multiple time-steps are available in dt, only the the data to the first one is plotted.
-#' @param data_col The name of the column in dt containing the data.
-#' @param rr range of the plotted variable, default is the range of the data. Manipulate this if you compare multiple plots.
-#' @param mn plot title
-#' @param legend_title legend title.
-#' @param colorscale A ScaleContinuous object specifying the scale for the plot layer fill. Can be used to change colors or legend title (by setting name).
-#' @param mapscale Either 'low', 'medium' or 'high'. Controls the scale of the map. Higher scale leads to better resolved
+#' @param dt Data table containing the data for plotting.
+#' @param data_col The name of the column in dt containing the data for plotting.
+#' @param mn optional plot title
+#' @param rr,low,mid,high,name,midpoint,... Arguments for the color scale, passed on to scale_fill_gradient2.
+#' rr replaces limits (specifying the range of the color scale) for consistency with the other plotting functions.
+#' Unlike for scale_fill_gradient2 the default midpoint is the center of the data range (or the center of rr, if provided), not 0.
+#' Note that specifying the midpoint can often be a convenient way to force a color scale with only two colors (for example, by setting it
+#' to the minimum or maximum of your data). Also note that ... can in particular be used to discretize the colorscale,
+#' usually by providing \code{n.breaks}. All of these arguments are ignored if \code{colorscale} is provided.
+#' @param colorscale This allows to pass any ScaleContinuous object to specify the color scale (for full flexibility).
+#' If this is provided, \code{rr,low,mid,high,name,midpoint,...} are ignored.
 #'
 #' @return a ggplot object.
 #'
 #' @import data.table
 #' @import ggplot2
-#' @importFrom rnaturalearth ne_countries
 #'
 #' @export
 #'
@@ -25,10 +29,9 @@
 
 ggplot_dt = function(dt,
                      data_col = colnames(dt)[3],
-                     rr = NULL,
                      mn = NULL,
-                     colorscale = scale_fill_gradient2(low = "blue", mid = "white", high = "red",name = data_col,limits = rr),
-                     mapscale = 'large')
+                     rr = NULL,low = "blue", mid = "white", high = "red",name = data_col,midpoint = NULL,...,
+                     colorscale = NULL)
 {
   ####### transform data #######
 
@@ -46,7 +49,9 @@ ggplot_dt = function(dt,
 
   #### get map: ####
 
-  world_map <- rnaturalearth::ne_countries(scale = mapscale, returnclass = "sf")
+  world_map <- ggplot2::map_data(map = 'world',resolution = 0)
+  # better maps are available with the rnaturalearth package and can be plotted using geom_sf.
+  # However, this approach requires gdal, so it's not exactly easily accessible.
 
   #### fix range and set values outside of range to the range border ####
 
@@ -54,6 +59,19 @@ ggplot_dt = function(dt,
   {
     rr = dt_sm[,range(get(data_col))]
   }
+
+  # set midpoint and color scale
+
+  if(is.null(midpoint))
+  {
+    midpoint = (rr[2]-rr[1])/2
+  }
+
+  if(is.null(colorscale))
+  {
+    colorscale = scale_fill_gradient2(low = low,mid = mid,high = high,name = data_col,limits = rr,midpoint = midpoint,...)
+  }
+
 
   lower_indices = dt_sm[,which(get(data_col) < rr[1])]
   upper_indices = dt_sm[,which(get(data_col) > rr[2])]
@@ -71,16 +89,21 @@ ggplot_dt = function(dt,
   lon_dist = lons[2] - lons[1]
   lat_dist = lats[2] - lats[1]
 
+  lon_range = range(lons) + c(-lon_dist/2,lon_dist/2)
+  lat_range = range(lats) + c(-lat_dist/2,lat_dist/2)
+
   ### plotting ###
   pp = ggplot(data = dt_sm) +
-    geom_rect(xmin = min(lons) - lon_dist/2,                           # add gray rectangle in the background, such that missing values appear gray
-              xmax = max(lons) + lon_dist/2,
-              ymin = min(lats) - lat_dist/2,
-              ymax = max(lats) + lat_dist/2,fill = 'gray') +
+    geom_rect(xmin = min(lons) - lon_dist,                             # add gray rectangle in the background, such that missing values appear gray
+              xmax = max(lons) + lon_dist,
+              ymin = min(lats) - lat_dist,
+              ymax = max(lats) + lat_dist,fill = 'gray') +
     geom_tile(aes(x = lon,y = lat, fill = get(data_col))) +            # add data plot
-    geom_sf(data = world_map,alpha = 0)  +                             # add map
-    colorscale +                                                       # colorscale is specified in the function head
-    coord_sf(xlim = range(lons),ylim = range(lats),expand = FALSE) +   # restricts the plot to exactly the considered area to avoid weird borders
+    geom_polygon(data = world_map,
+                 mapping = aes(x = long,y = lat,group = group),
+                 color = 'black',fill = NA,size=0.25)  +               # add map
+    colorscale +                                                       # colorscale is specified above
+    coord_sf(xlim = lon_range,ylim = lat_range,expand = FALSE) +       # restricts the plot to exactly the considered area to avoid weird borders
     xlab('') + ylab('') +                                              # remove default labels and background grid...
     theme(panel.background = element_blank(),
           axis.text = element_blank(),
@@ -90,7 +113,6 @@ ggplot_dt = function(dt,
 
   return(pp)
 }
-
 
 
 
@@ -261,6 +283,11 @@ plot_diagnostic = function( dt, var = colnames(dt)[3], mn = var,
 
   # add world map
   maps::map("world", add = TRUE)
+
+  if('lon' %in% names(dt))
+  {
+    dt[,c('Lon','Lat') := NULL]
+  }
 
   if(save_pdf) dev.off()
 

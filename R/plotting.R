@@ -64,7 +64,7 @@ ggplot_dt = function(dt,
 
   if(is.null(midpoint))
   {
-    midpoint = (rr[2]-rr[1])/2
+    midpoint = rr[1] + (rr[2]-rr[1])/2
   }
 
   if(is.null(colorscale))

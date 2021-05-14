@@ -2,38 +2,45 @@
 % Please edit documentation in R/plotting.R
 \name{ggplot_dt}
 \alias{ggplot_dt}
-\title{plotting function for precip fields}
+\title{plotting function for spatial data}
 \usage{
 ggplot_dt(
   dt,
   data_col = colnames(dt)[3],
-  rr = NULL,
   mn = NULL,
-  colorscale = scale_fill_gradient2(low = "blue", mid = "white", high = "red", name =
-    data_col, limits = rr),
-  mapscale = "large"
+  rr = NULL,
+  low = "blue",
+  mid = "white",
+  high = "red",
+  name = data_col,
+  midpoint = NULL,
+  ...,
+  colorscale = NULL
 )
 }
 \arguments{
-\item{dt}{Data table containing columns lon, lat and the data. The data defaults to the third column. If multiple time-steps are available in dt, only the the data to the first one is plotted.}
+\item{dt}{Data table containing the data for plotting.}
 
-\item{data_col}{The name of the column in dt containing the data.}
+\item{data_col}{The name of the column in dt containing the data for plotting.}
 
-\item{rr}{range of the plotted variable, default is the range of the data. Manipulate this if you compare multiple plots.}
+\item{mn}{optional plot title}
 
-\item{mn}{plot title}
+\item{rr, low, mid, high, name, midpoint, ...}{Arguments for the color scale, passed on to scale_fill_gradient2.
+rr replaces limits (specifying the range of the color scale) for consistency with the other plotting functions.
+Unlike for scale_fill_gradient2 the default midpoint is the center of the data range (or the center of rr, if provided), not 0.
+Note that specifying the midpoint can often be a convenient way to force a color scale with only two colors (for example, by setting it
+to the minimum or maximum of your data). Also note that ... can in particular be used to discretize the colorscale,
+usually by providing \code{n.breaks}. All of these arguments are ignored if \code{colorscale} is provided.}
 
-\item{colorscale}{A ScaleContinuous object specifying the scale for the plot layer fill. Can be used to change colors or legend title (by setting name).}
-
-\item{mapscale}{Either 'low', 'medium' or 'high'. Controls the scale of the map. Higher scale leads to better resolved}
-
-\item{legend_title}{legend title.}
+\item{colorscale}{This allows to pass any ScaleContinuous object to specify the color scale (for full flexibility).
+If this is provided, \code{rr,low,mid,high,name,midpoint,...} are ignored.}
 }
 \value{
 a ggplot object.
 }
 \description{
-plots dat on a regular grid over a map.
+Plots spatial data from a data.table. The data table needs to contain columns named 'lon' and 'lat'. The grid needs to be regular.
+The function runs a crude check whether the data is tempo-spatial. If it is, the time-slice of the first row is used.
 }
 \author{
 Claudio Heinrich

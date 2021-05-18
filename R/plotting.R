@@ -102,8 +102,9 @@ ggplot_dt = function(dt,
     geom_polygon(data = world_map,
                  mapping = aes(x = long,y = lat,group = group),
                  color = 'black',fill = NA,size=0.25)  +               # add map
-    colorscale +                                                       # colorscale is specified above
-    coord_sf(xlim = lon_range,ylim = lat_range,expand = FALSE) +       # restricts the plot to exactly the considered area to avoid weird borders
+    colorscale +  # colorscale is specified above
+    coord_cartesian(xlim = lon_range,ylim = lat_range,expand = FALSE) + # restricts the plot to exactly the considered area to avoid weird borders
+    #coord_sf(xlim = lon_range,ylim = lat_range,expand = FALSE) +       # restricts the plot to exactly the considered area to avoid weird borders
     xlab('') + ylab('') +                                              # remove default labels and background grid...
     theme(panel.background = element_blank(),
           axis.text = element_blank(),

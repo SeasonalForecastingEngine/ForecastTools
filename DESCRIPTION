@@ -16,7 +16,6 @@ Imports:
   maps,
   maptools,
   ncdf4,
-  rnaturalearth,
   sp
 License: MIT
 Encoding: UTF-8

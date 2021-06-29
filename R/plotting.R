@@ -8,14 +8,19 @@
 #' @param dt Data table containing the data for plotting.
 #' @param data_col The name of the column in dt containing the data for plotting.
 #' @param mn optional plot title
-#' @param rr,low,mid,high,name,midpoint,... Arguments for the color scale, passed on to scale_fill_gradient2.
+#' @param discrete_cs Logical. Should the color scale be discretized?
+#' @param rr,low,mid,high,name,midpoint,... Arguments for the color scale, passed on to scale_fill_gradient2/scale_fill_steps2 (depending on whether discrete_cs == TRUE).
 #' rr replaces limits (specifying the range of the color scale) for consistency with the other plotting functions.
 #' Unlike for scale_fill_gradient2 the default midpoint is the center of the data range (or the center of rr, if provided), not 0.
 #' Note that specifying the midpoint can often be a convenient way to force a color scale with only two colors (for example, by setting it
-#' to the minimum or maximum of your data). Also note that ... can in particular be used to discretize the colorscale,
-#' usually by providing \code{n.breaks}. All of these arguments are ignored if \code{colorscale} is provided.
+#' to the minimum or maximum of your data).
+#' When \code{discrete_cs == TRUE} you can, in particular, pass the arguments \code{n.breaks,breaks} to customize the scale.
+#' If you use n.breaks you might also want to set nice.breaks = FALSE, see ?scale_fill_steps2.
+#' @param binwidth only used when \code{discrete_cs == TRUE}. Normally, the breaks for the discrete colorscale are specified by n.breaks (which is not reliable, since they're adjusted to be 'nice'
+#' first), or by specifying the breaks explicitly (which is often tedious). This gives you a third option, namely specifying how far the breaks should be apart. The breaks are then set such
+#' that the midpoint is in the middle of the two center breaks.
 #' @param colorscale This allows to pass any ScaleContinuous object to specify the color scale (for full flexibility).
-#' If this is provided, \code{rr,low,mid,high,name,midpoint,...} are ignored.
+#' If this is provided, \code{discrete_cs,rr,low,mid,high,name,midpoint,...} are all ignored.
 #'
 #' @return a ggplot object.
 #'
@@ -29,9 +34,11 @@
 
 ggplot_dt = function(dt,
                      data_col = colnames(dt)[3],
-                     mn = NULL,
+                     mn = NULL, discrete_cs = FALSE,
                      rr = NULL,low = "blue", mid = "white", high = "red",name = data_col,midpoint = NULL,...,
-                     colorscale = NULL)
+                     binwidth = NULL,
+                     colorscale = NULL,
+                     tol = 0)
 {
   ####### transform data #######
 
@@ -69,7 +76,27 @@ ggplot_dt = function(dt,
 
   if(is.null(colorscale))
   {
-    colorscale = scale_fill_gradient2(low = low,mid = mid,high = high,name = data_col,limits = rr,midpoint = midpoint,...)
+    if(!discrete_cs)
+    {
+      colorscale = scale_fill_gradient2(low = low,mid = mid,high = high,name = name,limits = rr,midpoint = midpoint,...)
+    }
+    if(discrete_cs)
+    {
+      if(!is.null(binwidth))
+      {
+        nbinapprox = floor((rr[2] - rr[1])/binwidth)
+        bins1 = binwidth*(1/2 + (0:nbinapprox)) + midpoint
+        bins2 = -binwidth*(1/2 + (0:nbinapprox)) + midpoint
+        bins=  sort(unique(c(bins2,bins1)))
+        bins = round(bins[bins %between% rr],2)
+
+        colorscale = scale_fill_steps2(low = low,mid = mid,high = high,name = name,limits = rr,midpoint = midpoint,breaks = bins,...)
+      }
+      if(is.null(binwidth))
+      {
+        colorscale = scale_fill_steps2(low = low,mid = mid,high = high,name = name,limits = rr,midpoint = midpoint,...)
+      }
+    }
   }
 
 
@@ -89,15 +116,15 @@ ggplot_dt = function(dt,
   lon_dist = lons[2] - lons[1]
   lat_dist = lats[2] - lats[1]
 
-  lon_range = range(lons) + c(-lon_dist/2,lon_dist/2)
-  lat_range = range(lats) + c(-lat_dist/2,lat_dist/2)
+  lon_range = range(lons) + c(-lon_dist/2-tol,lon_dist/2+tol)
+  lat_range = range(lats) + c(-lat_dist/2-tol,lat_dist/2+tol)
 
   ### plotting ###
   pp = ggplot(data = dt_sm) +
-    geom_rect(xmin = min(lons) - lon_dist,                             # add gray rectangle in the background, such that missing values appear gray
-              xmax = max(lons) + lon_dist,
-              ymin = min(lats) - lat_dist,
-              ymax = max(lats) + lat_dist,fill = 'gray') +
+    geom_rect(xmin = min(lons) - lon_dist-tol,                             # add gray rectangle in the background, such that missing values appear gray
+              xmax = max(lons) + lon_dist+tol,
+              ymin = min(lats) - lat_dist-tol,
+              ymax = max(lats) + lat_dist+tol,fill = 'gray') +
     geom_tile(aes(x = lon,y = lat, fill = get(data_col))) +            # add data plot
     geom_polygon(data = world_map,
                  mapping = aes(x = long,y = lat,group = group),

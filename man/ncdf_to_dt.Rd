@@ -15,7 +15,8 @@ ncdf_to_dt(nc, subset_list = NULL, printunits = TRUE)
 long data table.
 }
 \description{
-function for converting netcdfs to long data tables.
+This function crashes when the netcdf has 'empty' dimension variables that are not used by any variable.
+This is the case for some netcdfs provided by ICPAC and CORDEX. The new version \code{netcdf_to_dt} overcomes this problem
 }
 \examples{
 {

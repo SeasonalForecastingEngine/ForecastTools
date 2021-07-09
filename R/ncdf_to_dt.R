@@ -1,5 +1,9 @@
 
 #' function for converting netcdfs to long data tables.
+#'
+#' @description This function crashes when the netcdf has 'empty' dimension variables that are not used by any variable.
+#' This is the case for some netcdfs provided by ICPAC and CORDEX. The new version \code{netcdf_to_dt} overcomes this problem
+#'
 #' @param nc either character string with the name of the .nc file (including path), or an object of type ncdf4
 #' @param subset_list named list for subsetting. The names must match dimension names of the nc file. The range of the vector contained on each page defines which subset of the data is read out.
 #' @return long data table.
@@ -107,3 +111,133 @@ ncdf_to_dt = function(nc,subset_list = NULL,printunits = TRUE)
   }
   return(return_dt)
 }
+
+
+
+
+#' function for converting netcdfs to long data tables.
+#'
+#' @description The function converts netcdfs into data.tables.
+#' Be aware that the data table can be much larger in memory, especially if you have many dimension variables.
+#' This function is more robust than the older version \code{ncdf_to_dt}. In particular it does not get confused
+#' if 'empty' dimension variables are present (some files from ICPAC and CORDEX).
+#'
+#' @param nc either character string with the name of the .nc file (including path), or an object of type ncdf4.
+#' @param vars Which variables should be read from the netcdf? Either a character vector of variable names, or a
+#' integer vector of variable indices, or NULL in which case all variables are read.
+#' @param verbose Either 0, 1 or 2. How much information should be printed?
+#' The default (2) is to print the entire netcdf information, 1 just prints the units of all variables, 0 (or any other input)
+#' prints nothing.
+#' @param trymerge logical. If TRUE a single data table containing all variables is returned, else a list of data
+#' tables, one for each variable. The latter is more memory efficient if you have multiple variables that depend
+#' on different dimensions.
+#'
+#' @return A data table if \code{trymerge == TRUE} or else a list of data tables.
+#'
+#' @import ncdf4
+#'
+#' @examples {
+#' fn = '/nr/project/stat/CONFER/Data/validation/example_data/202102/CorrelationSkillRain_Feb-Apr_Feb2021.nc'
+#' test = netcdf_to_dt(nc)
+#' }
+#'
+#' @author Claudio
+#'
+#' @export
+
+
+
+netcdf_to_dt = function(nc, vars = NULL,
+                        verbose = 2,
+                        printunits = !print_nc,
+                        trymerge = TRUE)
+{
+  if(is.character(nc)) nc = nc_open(nc)
+
+  if(verbose == 2) print(nc)
+
+
+  # convert vars to numeric vector indexing the variables you want to extract:
+  if(is.null(vars))
+  {
+    vars = 1:nc$nvars
+  } else if(is.character(vars))
+  {
+    vars = match(vars,names(nc$var))
+  }
+
+  dt_list = list()
+
+  units = NULL
+  for(var in vars)
+  {
+    v = nc$var[[var]]
+    units = c(units, paste0(v$name,': ',v$units))
+
+    dim_lengths = v$varsize
+
+    dt_temp = NULL
+
+    # generate data.table with dimensions:
+
+    for(i in 1:v$ndims)
+    {
+      # vectorize dimension entries:
+      # we need to first repeat using times = {the product of lengths of 'later' dimension vectors}...
+      dimension_vector = rep(v$dim[[i]]$vals,times = prod(dim_lengths[(i+1):(v$ndims + 1)],na.rm = T))
+      #... and then to repeat this using each = {the product of lengths of 'earlier' dimension vectors}:
+      dimension_vector = rep(dimension_vector,each = prod(dim_lengths[0:(i-1)],na.rm = T))
+
+      dt_ttemp = data.table(dimension_vector)
+      setnames(dt_ttemp,v$dim[[i]]$name)
+
+
+      dt_temp = data.table(dt_temp, dt_ttemp)
+    }
+
+    # add variable values:
+
+    dt_ttemp = data.table(as.vector(ncvar_get(nc,varid = v$name)))
+    setnames(dt_ttemp,v$name)
+
+    dt_list = c(dt_list,list(data.table(dt_temp,dt_ttemp)))
+
+  }
+
+
+  # merge list into data.table:
+  if(trymerge)
+  {
+    if(length(dt_list) == 1)
+    {
+      dt_list = rbindlist(dt_list) # for some reason unlist(,recursive = FALSE) does not work here and also unlists the data table
+    } else
+    {
+      dt0 = dt_list[[1]]
+      for(i in 2:length(dt_list))
+      {
+        if(length(intersect(names(dt0),names(dt_list[[i]]))) == 0)
+        {
+          stop('Your file has variables with disjoint dimensions, which should not be stored in a single data table. Either set trymerge to FALSE or select variables with overlapping dimensions in vars.' )
+        }
+        dt0 = merge(dt0,dt_list[[i]],by = intersect(names(dt0),names(dt_list[[i]])), all = T)
+      }
+      dt_list = dt0
+    }
+  }
+
+  # print units of dimension variables:
+  if(verbose == 1)
+  {
+    for(i in 1:length(nc$dim))
+    {
+      units = c(units, paste0(names(nc$dim)[i],': ',nc$dim[[i]]$units))
+    }
+
+    catout = paste0(c('Units:',units),sep = '',collapse = "\n")
+    cat(catout)
+  }
+
+  return(dt_list)
+}
+

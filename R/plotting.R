@@ -16,9 +16,10 @@
 #' to the minimum or maximum of your data).
 #' When \code{discrete_cs == TRUE} you can, in particular, pass the arguments \code{n.breaks,breaks} to customize the scale.
 #' If you use n.breaks you might also want to set nice.breaks = FALSE, see ?scale_fill_steps2.
-#' @param binwidth only used when \code{discrete_cs == TRUE}. Normally, the breaks for the discrete colorscale are specified by n.breaks (which is not reliable, since they're adjusted to be 'nice'
-#' first), or by specifying the breaks explicitly (which is often tedious). This gives you a third option, namely specifying how far the breaks should be apart. The breaks are then set such
-#' that the midpoint is in the middle of the two center breaks.
+#' @param binwidth,bin_midpoint only used when \code{discrete_cs == TRUE}. Normally, the breaks for the discrete colorscale are specified by n.breaks (which is not reliable,
+#' since they're adjusted to be 'nice'), or by specifying the breaks explicitly (which is often tedious). This gives you a third option, namely specifying how far the breaks
+#' should be apart, and specifying the centerpoint for one of the bins (default is midpoint, or the center of rr if midpoint is not provided). For example, if your color scale shows
+#' percentages and you'd like 4 categories, the easiest way to specify is \code{binwidth = 25, bin_midpoint = 12.5}.
 #' @param colorscale This allows to pass any ScaleContinuous object to specify the color scale (for full flexibility).
 #' If this is provided, \code{discrete_cs,rr,low,mid,high,name,midpoint,...} are all ignored.
 #'
@@ -36,7 +37,7 @@ ggplot_dt = function(dt,
                      data_col = colnames(dt)[3],
                      mn = NULL, discrete_cs = FALSE,
                      rr = NULL,low = "blue", mid = "white", high = "red",name = data_col,midpoint = NULL,...,
-                     binwidth = NULL,
+                     binwidth = NULL,bin_midpoint = midpoint,
                      colorscale = NULL,
                      tol = 0)
 {
@@ -72,7 +73,13 @@ ggplot_dt = function(dt,
   if(is.null(midpoint))
   {
     midpoint = rr[1] + (rr[2]-rr[1])/2
+    if(is.null(bin_midpoint))
+    {
+      bin_midpoint = midpoint
+    }
+
   }
+
 
   if(is.null(colorscale))
   {
@@ -85,12 +92,15 @@ ggplot_dt = function(dt,
       if(!is.null(binwidth))
       {
         nbinapprox = floor((rr[2] - rr[1])/binwidth)
-        bins1 = binwidth*(1/2 + (0:nbinapprox)) + midpoint
-        bins2 = -binwidth*(1/2 + (0:nbinapprox)) + midpoint
+        bins1 = binwidth*(1/2 + (0:nbinapprox)) + bin_midpoint
+        bins2 = -binwidth*(1/2 + (0:nbinapprox)) + bin_midpoint
         bins=  sort(unique(c(bins2,bins1)))
         bins = round(bins[bins %between% rr],2)
 
-        colorscale = scale_fill_steps2(low = low,mid = mid,high = high,name = name,limits = rr,midpoint = midpoint,breaks = bins,...)
+        # for discrete scales there used to be an issue where the boundary bins are shown wider in the legend,
+        # see https://github.com/tidyverse/ggplot2/issues/4019. This was resolved in ggplot2 version 2.3.4.
+
+        colorscale = scale_fill_steps2(low = low, mid = mid, high = high, name = name, limits = rr, midpoint = midpoint, breaks = bins, ...)
       }
       if(is.null(binwidth))
       {

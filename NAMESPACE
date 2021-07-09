@@ -3,6 +3,7 @@
 export(ggplot_dt)
 export(mat_to_dt)
 export(ncdf_to_dt)
+export(netcdf_to_dt)
 export(plot_diagnostic)
 export(plot_smooth)
 export(squarify)

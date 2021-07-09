@@ -11,10 +11,10 @@
 #' @param discrete_cs Logical. Should the color scale be discretized?
 #' @param rr,low,mid,high,name,midpoint,... Arguments for the color scale, passed on to scale_fill_gradient2/scale_fill_steps2 (depending on whether discrete_cs == TRUE).
 #' rr replaces limits (specifying the range of the color scale) for consistency with the other plotting functions.
-#' Unlike for scale_fill_gradient2 the default midpoint is the center of the data range (or the center of rr, if provided), not 0.
+#' Unlike for scale_fill_gradient2, the default midpoint is the center of the data range (or the center of rr, if provided), not 0.
 #' Note that specifying the midpoint can often be a convenient way to force a color scale with only two colors (for example, by setting it
-#' to the minimum or maximum of your data).
-#' When \code{discrete_cs == TRUE} you can, in particular, pass the arguments \code{n.breaks,breaks} to customize the scale.
+#' to the minimum or maximum of your data). The ... argument can in particular be used to customize the legend/colorbar using the function \code{guide_colorbar},
+#' see https://ggplot2.tidyverse.org/reference/guide_colourbar.html. Moreover, when \code{discrete_cs == TRUE} you can pass the arguments \code{n.breaks,breaks} to customize the scale.
 #' If you use n.breaks you might also want to set nice.breaks = FALSE, see ?scale_fill_steps2.
 #' @param binwidth,bin_midpoint only used when \code{discrete_cs == TRUE}. Normally, the breaks for the discrete colorscale are specified by n.breaks (which is not reliable,
 #' since they're adjusted to be 'nice'), or by specifying the breaks explicitly (which is often tedious). This gives you a third option, namely specifying how far the breaks

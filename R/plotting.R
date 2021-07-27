@@ -9,19 +9,19 @@
 #' @param data_col The name of the column in dt containing the data for plotting.
 #' @param mn optional plot title
 #' @param discrete_cs Logical. Should the color scale be discretized?
-#' @param rr,low,mid,high,name,midpoint,... Arguments for the color scale, passed on to scale_fill_gradient2/scale_fill_steps2 (depending on whether discrete_cs == TRUE).
-#' rr replaces limits (specifying the range of the color scale) for consistency with the other plotting functions.
+#' @param rr,low,mid,high,name,midpoint,na.value,oob,guide,... Arguments for the color scale, passed to scale_fill_gradient2/scale_fill_steps2 (depending on whether discrete_cs == TRUE).
+#' rr replaces limits (specifying the range of the color scale) for consistency with the older plotting functions from the PostProcessing package.
 #' Unlike for scale_fill_gradient2, the default midpoint is the center of the data range (or the center of rr, if provided), not 0.
 #' Note that specifying the midpoint can often be a convenient way to force a color scale with only two colors (for example, by setting it
-#' to the minimum or maximum of your data). The ... argument can in particular be used to customize the legend/colorbar using the function \code{guide_colorbar},
+#' to the minimum or maximum of your data). \code{na.value} specifies the color of missing values. \code{oob} specifies the treatment of out-of-boundary values, i.e. values beyond the
+#' limits \code{rr}.
+#' The ... argument can in particular be used to customize the legend/colorbar using the function \code{guide_colorbar},
 #' see https://ggplot2.tidyverse.org/reference/guide_colourbar.html. Moreover, when \code{discrete_cs == TRUE} you can pass the arguments \code{n.breaks,breaks} to customize the scale.
 #' If you use n.breaks you might also want to set nice.breaks = FALSE, see ?scale_fill_steps2.
 #' @param binwidth,bin_midpoint only used when \code{discrete_cs == TRUE}. Normally, the breaks for the discrete colorscale are specified by n.breaks (which is not reliable,
 #' since they're adjusted to be 'nice'), or by specifying the breaks explicitly (which is often tedious). This gives you a third option, namely specifying how far the breaks
 #' should be apart, and specifying the centerpoint for one of the bins (default is midpoint, or the center of rr if midpoint is not provided). For example, if your color scale shows
-#' percentages and you'd like 4 categories, the easiest way to specify is \code{binwidth = 25, bin_midpoint = 12.5}.
-#' @param colorscale This allows to pass any ScaleContinuous object to specify the color scale (for full flexibility).
-#' If this is provided, \code{discrete_cs,rr,low,mid,high,name,midpoint,...} are all ignored.
+#' percentages and you'd like 4 categories, ranging from white to red, this is easiest achieved by \code{binwidth = 25, midpoint = 12.5}.
 #'
 #' @return a ggplot object.
 #'
@@ -35,11 +35,19 @@
 
 ggplot_dt = function(dt,
                      data_col = colnames(dt)[3],
-                     mn = NULL, discrete_cs = FALSE,
-                     rr = NULL,low = "blue", mid = "white", high = "red",name = data_col,midpoint = NULL,...,
-                     binwidth = NULL,bin_midpoint = midpoint,
-                     colorscale = NULL,
-                     tol = 0)
+                     mn = NULL,
+                     discrete_cs = FALSE,
+                     rr = NULL,
+                     low = "blue",
+                     mid = "white",
+                     high = "red",
+                     name = data_col,
+                     midpoint = NULL,
+                     na.value = 'gray50',
+                     oob = scales::squish,
+                     guide = guide_colorbar(barwidth = 0.5, barheight = 10),
+                     ...,
+                     binwidth = NULL,bin_midpoint = midpoint)
 {
   ####### transform data #######
 
@@ -47,12 +55,17 @@ ggplot_dt = function(dt,
 
   time_cols = intersect(names(dt),c('month','year','day','date','season'))
 
-  dt_sm = dt[,.SD,.SDcols = c('lon','lat',data_col,time_cols)][!is.na(get(data_col))]
+  dt_sm = dt[,.SD,.SDcols = c('lon','lat',data_col,time_cols)]
 
   if(length(time_cols)>0)
   {
     tc1 = dt_sm[1,.SD,.SDcols = time_cols]
     dt_sm = merge(dt_sm,tc1,by = time_cols)
+  }
+
+  if(dt_sm[,.N] > unique(dt_sm[,.(lon,lat)])[,.N])
+  {
+    warning('Your data has multiple entries per lon/lat coordinate. By default, the last value for each coordinate is plotted.' )
   }
 
   #### get map: ####
@@ -65,11 +78,10 @@ ggplot_dt = function(dt,
 
   if(is.null(rr))
   {
-    rr = dt_sm[,range(get(data_col))]
+    rr = dt_sm[,range(get(data_col),na.rm = T)]
   }
 
-  # set midpoint and color scale
-
+  # set midpoint:
   if(is.null(midpoint))
   {
     midpoint = rr[1] + (rr[2]-rr[1])/2
@@ -80,70 +92,56 @@ ggplot_dt = function(dt,
 
   }
 
-
-  if(is.null(colorscale))
+  # set colorscale:
+  if(!discrete_cs)
   {
-    if(!discrete_cs)
+    colorscale = scale_fill_gradient2(low = low, mid = mid, high = high,
+                                      name = name, limits = rr, midpoint = midpoint,
+                                      na.value = na.value,oob = oob,
+                                      guide = guide,...)
+  }
+  if(discrete_cs)
+  {
+    if(!is.null(binwidth))
     {
-      colorscale = scale_fill_gradient2(low = low,mid = mid,high = high,name = name,limits = rr,midpoint = midpoint,...)
+      nbinapprox = floor((rr[2] - rr[1])/binwidth)
+      bins1 = binwidth*(1/2 + (0:nbinapprox)) + bin_midpoint
+      bins2 = -binwidth*(1/2 + (0:nbinapprox)) + bin_midpoint
+      bins=  sort(unique(c(bins2,bins1)))
+      bins = round(bins[bins %between% rr],2)
+
+      # for discrete scales there used to be an issue where the boundary bins are shown wider in the legend,
+      # see https://github.com/tidyverse/ggplot2/issues/4019. This was resolved in ggplot2 version 2.3.4.
+
+      colorscale = scale_fill_steps2(low = low, mid = mid, high = high,
+                                     name = name, limits = rr, midpoint = midpoint,
+                                     breaks = bins,
+                                     na.value = na.value, oob = oob, guide = guide,...)
     }
-    if(discrete_cs)
+    if(is.null(binwidth))
     {
-      if(!is.null(binwidth))
-      {
-        nbinapprox = floor((rr[2] - rr[1])/binwidth)
-        bins1 = binwidth*(1/2 + (0:nbinapprox)) + bin_midpoint
-        bins2 = -binwidth*(1/2 + (0:nbinapprox)) + bin_midpoint
-        bins=  sort(unique(c(bins2,bins1)))
-        bins = round(bins[bins %between% rr],2)
-
-        # for discrete scales there used to be an issue where the boundary bins are shown wider in the legend,
-        # see https://github.com/tidyverse/ggplot2/issues/4019. This was resolved in ggplot2 version 2.3.4.
-
-        colorscale = scale_fill_steps2(low = low, mid = mid, high = high, name = name, limits = rr, midpoint = midpoint, breaks = bins, ...)
-      }
-      if(is.null(binwidth))
-      {
-        colorscale = scale_fill_steps2(low = low,mid = mid,high = high,name = name,limits = rr,midpoint = midpoint,...)
-      }
+      colorscale = scale_fill_steps2(low = low, mid = mid, high = high,
+                                     name = name, limits = rr, midpoint = midpoint,
+                                     na.value = na.value, oob = oob,
+                                     guide = guide, ...)
     }
   }
 
 
-  lower_indices = dt_sm[,which(get(data_col) < rr[1])]
-  upper_indices = dt_sm[,which(get(data_col) > rr[2])]
-
-  dt_sm[lower_indices,(data_col) := rr[1]]
-  dt_sm[upper_indices,(data_col) := rr[2]]
-
-  ### setup for plotting ###
-
-  lats = sort(unique(dt_sm[,lat]))
-  lons = sort(unique(dt_sm[,lon]))
-
-  dt_sm = dt_sm[!is.na(get(data_col))]
-
-  lon_dist = lons[2] - lons[1]
-  lat_dist = lats[2] - lats[1]
-
-  lon_range = range(lons) + c(-lon_dist/2-tol,lon_dist/2+tol)
-  lat_range = range(lats) + c(-lat_dist/2-tol,lat_dist/2+tol)
-
   ### plotting ###
   pp = ggplot(data = dt_sm) +
-    geom_rect(xmin = min(lons) - lon_dist-tol,                             # add gray rectangle in the background, such that missing values appear gray
-              xmax = max(lons) + lon_dist+tol,
-              ymin = min(lats) - lat_dist-tol,
-              ymax = max(lats) + lat_dist+tol,fill = 'gray') +
-    geom_tile(aes(x = lon,y = lat, fill = get(data_col))) +            # add data plot
+    geom_raster(aes(x = lon,y = lat, fill = get(data_col))) +            # add data plot
     geom_polygon(data = world_map,
                  mapping = aes(x = long,y = lat,group = group),
                  color = 'black',fill = NA,size=0.25)  +               # add map
     colorscale +  # colorscale is specified above
-    coord_cartesian(xlim = lon_range,ylim = lat_range,expand = FALSE) + # restricts the plot to exactly the considered area to avoid weird borders
+    coord_cartesian(xlim = range(dt_sm[,lon],na.rm = T),
+                    ylim = range(dt_sm[,lat],na.rm = T),
+                    expand = FALSE) + # restricts the plot to exactly the considered area to avoid weird borders
     #coord_sf(xlim = lon_range,ylim = lat_range,expand = FALSE) +       # restricts the plot to exactly the considered area to avoid weird borders
     xlab('') + ylab('') +                                              # remove default labels and background grid...
-    theme(panel.background = element_blank(),
+    theme(panel.background = element_rect(fill =na.value), # this is required in case a data table is passed that has 'truely' missing locations, i.e. that is not rectangular
+          panel.grid = element_blank(),
           axis.text = element_blank(),
           axis.ticks = element_blank())
 

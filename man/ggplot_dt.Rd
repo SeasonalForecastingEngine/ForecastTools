@@ -15,11 +15,12 @@ ggplot_dt(
   high = "red",
   name = data_col,
   midpoint = NULL,
+  na.value = "gray50",
+  oob = scales::squish,
+  guide = guide_colorbar(barwidth = 0.5, barheight = 10),
   ...,
   binwidth = NULL,
-  bin_midpoint = midpoint,
-  colorscale = NULL,
-  tol = 0
+  bin_midpoint = midpoint
 )
 }
 \arguments{
@@ -31,21 +32,20 @@ ggplot_dt(
 
 \item{discrete_cs}{Logical. Should the color scale be discretized?}
 
-\item{rr, low, mid, high, name, midpoint, ...}{Arguments for the color scale, passed on to scale_fill_gradient2/scale_fill_steps2 (depending on whether discrete_cs == TRUE).
-rr replaces limits (specifying the range of the color scale) for consistency with the other plotting functions.
+\item{rr, low, mid, high, name, midpoint, na.value, oob, guide, ...}{Arguments for the color scale, passed to scale_fill_gradient2/scale_fill_steps2 (depending on whether discrete_cs == TRUE).
+rr replaces limits (specifying the range of the color scale) for consistency with the older plotting functions from the PostProcessing package.
 Unlike for scale_fill_gradient2, the default midpoint is the center of the data range (or the center of rr, if provided), not 0.
 Note that specifying the midpoint can often be a convenient way to force a color scale with only two colors (for example, by setting it
-to the minimum or maximum of your data). The ... argument can in particular be used to customize the legend/colorbar using the function \code{guide_colorbar},
+to the minimum or maximum of your data). \code{na.value} specifies the color of missing values. \code{oob} specifies the treatment of out-of-boundary values, i.e. values beyond the
+limits \code{rr}.
+The ... argument can in particular be used to customize the legend/colorbar using the function \code{guide_colorbar},
 see https://ggplot2.tidyverse.org/reference/guide_colourbar.html. Moreover, when \code{discrete_cs == TRUE} you can pass the arguments \code{n.breaks,breaks} to customize the scale.
 If you use n.breaks you might also want to set nice.breaks = FALSE, see ?scale_fill_steps2.}
 
 \item{binwidth, bin_midpoint}{only used when \code{discrete_cs == TRUE}. Normally, the breaks for the discrete colorscale are specified by n.breaks (which is not reliable,
 since they're adjusted to be 'nice'), or by specifying the breaks explicitly (which is often tedious). This gives you a third option, namely specifying how far the breaks
 should be apart, and specifying the centerpoint for one of the bins (default is midpoint, or the center of rr if midpoint is not provided). For example, if your color scale shows
-percentages and you'd like 4 categories, the easiest way to specify is \code{binwidth = 25, bin_midpoint = 12.5}.}
-
-\item{colorscale}{This allows to pass any ScaleContinuous object to specify the color scale (for full flexibility).
-If this is provided, \code{discrete_cs,rr,low,mid,high,name,midpoint,...} are all ignored.}
+percentages and you'd like 4 categories, ranging from white to red, this is easiest achieved by \code{binwidth = 25, midpoint = 12.5}.}
 }
 \value{
 a ggplot object.

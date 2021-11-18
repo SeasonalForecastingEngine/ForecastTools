@@ -4,13 +4,7 @@
 \alias{netcdf_to_dt}
 \title{function for converting netcdfs to long data tables.}
 \usage{
-netcdf_to_dt(
-  nc,
-  vars = NULL,
-  verbose = 2,
-  printunits = !print_nc,
-  trymerge = TRUE
-)
+netcdf_to_dt(nc, vars = NULL, verbose = 2, trymerge = TRUE, subset_list = NULL)
 }
 \arguments{
 \item{nc}{either character string with the name of the .nc file (including path), or an object of type ncdf4.}
@@ -25,6 +19,10 @@ prints nothing.}
 \item{trymerge}{logical. If TRUE a single data table containing all variables is returned, else a list of data
 tables, one for each variable. The latter is more memory efficient if you have multiple variables that depend
 on different dimensions.}
+
+\item{subset_list}{A named list. The names of the pages must correspond to the names of dimension variables in the netcdf, and each page contains a (two-element-)range vector.
+For example, subsetting a global dataset to just East Africa could look like this: subset_list = list(latitude = c(-15,25),longitude = c(20,55)).
+Non-rectangular subsetting during reading a netcdf seems to be difficult, see ncvar_get. Every dimension variable not named in subset_list is read entirely.}
 }
 \value{
 A data table if \code{trymerge == TRUE} or else a list of data tables.

@@ -131,6 +131,9 @@ ncdf_to_dt = function(nc,subset_list = NULL,printunits = TRUE)
 #' @param trymerge logical. If TRUE a single data table containing all variables is returned, else a list of data
 #' tables, one for each variable. The latter is more memory efficient if you have multiple variables that depend
 #' on different dimensions.
+#' @param subset_list A named list. The names of the pages must correspond to the names of dimension variables in the netcdf, and each page contains a (two-element-)range vector.
+#' For example, subsetting a global dataset to just East Africa could look like this: subset_list = list(latitude = c(-15,25),longitude = c(20,55)).
+#' Non-rectangular subsetting during reading a netcdf seems to be difficult, see ncvar_get. Every dimension variable not named in subset_list is read entirely.
 #'
 #' @return A data table if \code{trymerge == TRUE} or else a list of data tables.
 #'
@@ -149,8 +152,8 @@ ncdf_to_dt = function(nc,subset_list = NULL,printunits = TRUE)
 
 netcdf_to_dt = function(nc, vars = NULL,
                         verbose = 2,
-                        printunits = !print_nc,
-                        trymerge = TRUE)
+                        trymerge = TRUE,
+                        subset_list = NULL)
 {
   if(is.character(nc)) nc = nc_open(nc)
 
@@ -168,26 +171,66 @@ netcdf_to_dt = function(nc, vars = NULL,
 
   dt_list = list()
 
+  if(!is.null(subset_list))
+  {
+    which_dims_subsetted = match(names(subset_list),names(nc$dim))
+    for(ii in which_dims_subsetted)
+    {
+      dim_name = nc$dim[[ii]]$name
+      vals = nc$dim[[ii]]$vals
+      read_inds = which(vals %between% subset_list[[dim_name]])
+      subset_list[[dim_name]] = list(start = min(read_inds),count = max(read_inds) - min(read_inds) + 1)
+    }
+  }
+
+
   units = NULL
   for(var in vars)
   {
     v = nc$var[[var]]
     units = c(units, paste0(v$name,': ',v$units))
 
+    # subsetting:
+    start = rep(1,v$ndims)
+    count = rep(-1,v$ndims)
+    for(ii in 1:length(v$dim))
+    {
+      if(v$dim[[ii]]$name %in% names(subset_list))
+      {
+        start[ii] = subset_list[[v$dim[[ii]]$name]]$start
+        count[ii] = subset_list[[v$dim[[ii]]$name]]$count
+      }
+    }
+
+
     dim_lengths = v$varsize
+
+    dim_lengths = count * (count != -1) + v$varsize * (count == -1)
+
+    if(prod(dim_lengths) > 2^31) stop('The resulting data.table (for variable ',v$name,') is too long! Try subsetting.')
 
     dt_temp = NULL
 
-    # generate data.table with dimensions:
+    # generate data.table with dimensions: Do NOT use nvar_get here because that fails when dimvarid is missing :-P
 
     for(i in 1:v$ndims)
     {
       # vectorize dimension entries:
-      # we need to first repeat using times = {the product of lengths of 'later' dimension vectors}...
-      dimension_vector = rep(v$dim[[i]]$vals,times = prod(dim_lengths[(i+1):(v$ndims + 1)],na.rm = T))
-      #... and then to repeat this using each = {the product of lengths of 'earlier' dimension vectors}:
-      dimension_vector = rep(dimension_vector,each = prod(dim_lengths[0:(i-1)],na.rm = T))
 
+      if(count[i] == -1)
+      {
+        # we need to first repeat using times = {the product of lengths of 'later' dimension vectors}...
+        dimension_vector = rep(v$dim[[i]]$vals,times = prod(dim_lengths[(i+1):(v$ndims + 1)],na.rm = T))
+        #... and then to repeat this using each = {the product of lengths of 'earlier' dimension vectors}:
+        dimension_vector = rep(dimension_vector,each = prod(dim_lengths[0:(i-1)],na.rm = T))
+      } else {
+        read_inds = start[i] : (start[i] + count[i] - 1)
+        # we need to first repeat using times = {the product of lengths of 'later' dimension vectors}...
+        dimension_vector = rep(v$dim[[i]]$vals[read_inds],times = prod(dim_lengths[(i+1):(v$ndims + 1)],na.rm = T))
+        #... and then to repeat this using each = {the product of lengths of 'earlier' dimension vectors}:
+        dimension_vector = rep(dimension_vector,each = prod(dim_lengths[0:(i-1)],na.rm = T))
+
+      }
       dt_ttemp = data.table(dimension_vector)
       setnames(dt_ttemp,v$dim[[i]]$name)
 
@@ -197,7 +240,7 @@ netcdf_to_dt = function(nc, vars = NULL,
 
     # add variable values:
 
-    dt_ttemp = data.table(as.vector(ncvar_get(nc,varid = v$name)))
+    dt_ttemp = data.table(as.vector(ncvar_get(nc,varid = v$name,start = start,count = count)))
     setnames(dt_ttemp,v$name)
 
     dt_list = c(dt_list,list(data.table(dt_temp,dt_ttemp)))
@@ -240,4 +283,112 @@ netcdf_to_dt = function(nc, vars = NULL,
 
   return(dt_list)
 }
+
+#' function for writing netcdfs from long data tables.
+#'
+#' @description currently does not support writing netcdfs with multiple variables that have different dimension variables!
+#'
+#'
+#' @param dt a data.table
+#' @param vars names of columns in dt containing variables.
+#' @param units character vector containing the units for vars (in the same order). If this is NULL (default), the user is prompted for input.
+#' @param dim_vars names of columns in dt containing dimension variables.
+#' @param dim_var_units character vector containing the units for dim_vars (in the same order). If this is NULL (default), the user is prompted for input, except for lon/lat, which is filled in automatically.
+#' @param nc_out (path and) file name of the netcdf to write
+#'
+#' @return none.
+#'
+#' @import ncdf4
+#'
+#'
+#' @author Claudio
+#'
+#' @export
+
+
+dt_to_netcdf = function(dt,vars,units = NULL,
+                        dim_vars = intersect(c('lon','lat','time'),names(dt)), dim_var_units = NULL,
+                        nc_out)
+{
+  # get data into correct order:
+  setkeyv(dt,rev(dim_vars))
+
+  # expand data.table by NAs to contain all values in a 'rectangular' array, and get dimension variables:
+  dim_list = list()
+  dim_vars_ncdf = list()
+
+  for(ii in seq_along(dim_vars))
+  {
+    dv = dim_vars[ii]
+    vals = sort(unique(dt[,get(dv)]))
+    temp = list(vals)
+    names(temp) = dv
+
+    ### get unit for dimvar ###
+    if(!is.null(dim_var_units)){
+      unit = dim_var_units[ii]
+    } else {
+      if(dv == 'lon') unit = 'degree longitude'
+      if(dv == 'lat') unit = 'degree latitude'
+      if(!(dv %in% c('lon','lat')))
+      {
+        unit = readline(prompt = paste0('Enter the unit of the dimension variable ',dv,':\n'))
+      }
+    }
+
+    dim_var = ncdim_def(name = dv,units = unit,vals = vals)
+    dim_vars_ncdf = c(dim_vars_ncdf,list(dim_var))
+    dim_list = c(dim_list,temp)
+  }
+
+  # get the 'rectangular' dt:
+  expand_dt = as.data.table(expand.grid(dim_list))
+  dt = merge(dt,expand_dt,all = TRUE)
+  setkeyv(dt,rev(dim_vars))
+
+  # define the variables of the netcdf:
+  vars_ncdf = list()
+  for(ii in seq_along(vars))
+  {
+    v = vars[ii]
+    vals = dt[,get(v)]
+
+    if(is.null(units))
+      {
+      unit = readline(prompt = paste0('Enter the unit of the variable ',v,':\n'))
+    } else {
+      unit = units[ii]
+    }
+
+    ncvar = ncvar_def(name = v,
+                      units = unit,
+                      dim = dim_vars_ncdf,
+                      missval = NA)
+
+    vars_ncdf = c(vars_ncdf,list(ncvar))
+  }
+
+  # write the netcdf file:
+  if(!file.exists(nc_out))
+  {
+    nc = nc_create(filename = nc_out,vars = c(vars_ncdf))
+  } else {
+    check = readline(prompt = paste0('The netcdf file already exists. Do you want to overwrite? [y/n]'))
+    if(check == 'y') {
+      file.remove(nc_out)
+      nc = nc_create(filename = nc_out,vars = c(vars_ncdf))
+    }else(stop('writing netcdf aborted.'))
+  }
+
+  for(ii in seq_along(vars))
+  {
+    v = vars[ii]
+    values = dt[,get(v)]
+
+    ncvar_put(nc, varid = vars[ii],vals = values)
+  }
+
+  nc_close(nc)
+}
+
 

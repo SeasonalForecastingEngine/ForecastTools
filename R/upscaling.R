@@ -16,19 +16,19 @@
 #' (in this case there might be coarse grid cells that are fully contained in a fine grid, which is not accounted for).
 #'
 #' In the current implementation, a coarse grid cell gets assigned a value if it overlaps with at least one fine grid cell containing a value. When your large grid spans a wider geographic area,
-#' this can mean that the large grids at the border of your data get assigned a value even when they only have a fraction of overlap with a small grid cell. This can be problematic, in particular when your coarse grid is much coarser
+#' this can mean that the large grid cells at the border of your data get assigned a value even when they only have a fraction of overlap with a small grid cell. This can be problematic, in particular when your coarse grid is much coarser
 #' than the fine grid.
 #'
-#' Even though the grids are assumed to be regular, the function allows for missing data in the form of missing grid points in dt (so you don't have to 'squarify' it adding NAs before upscaling). In fact, the function is
+#' Even though the grids are assumed to be regular, the function allows for missing data in the form of missing grid points in dt (so you don't have to 'squarify' it, adding NAs before upscaling). In fact, the function is
 #' faster when missing-data-grid-points are not contained in dt (since fewer grid points need to be matched).
 #'
 #'
 #'
 #' @param dt data table containing the data you want to upscale.
 #' @param coarse_grid data table containing lons/lats of the grid you want to upscale to.
-#' @param uscols column name(s) of the data you want to upscale (can take multiple columns at once).
+#' @param uscols column name(s) of the data you want to upscale (can take multiple columns at once, but assumes that the different columns have missing values at the same position).
 #' @param bycols optional column names for grouping if you have repeated data on the same grid, e.g. use bycols = 'date' if your data table contains observations for many dates on the same grid (and the column specifying the date is in fact called 'date').
-#' @param tol tolerance parameter used for grid matching, in order to deal with rounding errors present in the coordinates. The gridpoint areas are calculated with this precision so the output has errors of this order of magnitude.
+#' @param tol tolerance parameter used for grid matching, in order to deal with rounding errors present in the coordinates. The gridpoint areas are calculated with this precision, so the output has errors of this order of magnitude.
 #'
 #' @export
 
@@ -89,7 +89,7 @@ upscale_regular_lon_lat = function(dt,
   d_lon = min(d_lons)
   d_lat = min(d_lats)
 
-
+  # corner point coordinates for the fine grid:
   fg_lon_mins = fg_lons - d_lon/2
   fg_lon_maxs = fg_lons + d_lon/2
   fg_lat_mins = fg_lats - d_lat/2
@@ -108,27 +108,29 @@ upscale_regular_lon_lat = function(dt,
 
 
   # For the corner points of the coarse grids we expand each grid cell by `tol`.
-  # This ensures that the area covered by the coarse grid does not get any holes because of rounding errors.
+  # This ensures that the area covered by the coarse grid does not get any 'holes' because of rounding errors.
   # Note however, that the area covered by the coarse grid might be smaller than the area covered by the fine grid,
   # so it is not required for each fine-grid-point to be contained in a coarse grid point...
 
-  cg_lon_mins = cg_lons - D_lon/2 - tol
-  cg_lon_maxs = cg_lons + D_lon/2 + tol
-  cg_lat_mins = cg_lats - D_lat/2 - tol
-  cg_lat_maxs = cg_lats + D_lat/2 + tol
+  # upon rereading this code I'm wondering whether we actually need to do this?
+
+  cg_lon_mins = cg_lons - D_lon/2
+  cg_lon_maxs = cg_lons + D_lon/2
+  cg_lat_mins = cg_lats - D_lat/2
+  cg_lat_maxs = cg_lats + D_lat/2
 
 
   #### For each corner-point of the fine grid, find in which grid-cell of the coarse grid it is contained (if any). ###
 
   find_index_lon = function(fine_lons)
   {
-    ret_list = lapply(fine_lons,FUN = function(x) which(x >= cg_lon_mins & x < cg_lon_maxs))
+    ret_list = lapply(fine_lons,FUN = function(x) which(x >= cg_lon_mins & x <= cg_lon_maxs))
 
     # if you just unlist this, the coordinates that don't match any coarse grid cell are getting lost, so we need to do the following:
     is_null = unlist(lapply(ret_list,length)) == 0
     ret_list[is_null] = 0
-    ret_list= lapply(ret_list, `[[`, 1) # some fine-grid-corner-coordinates may be assigned to multiple coarse grid coordinates due to rounding errors.
-                                        # In this case it does not matter which grid cell we assign it to, this hack assigns it to the first one.
+    ret_list= lapply(ret_list, `[[`, 1) # some fine-grid-corner-coordinates may be assigned to multiple coarse grid coordinates due to rounding errors, and the tol-expansion.
+                                        # In this case it does not matter which of the grid cell we assign it to, this hack assigns it to the first one.
 
     return(unlist(ret_list))
   }
@@ -220,8 +222,8 @@ upscale_regular_lon_lat = function(dt,
 
   # for a rectangle with corner coordinates lon_min, lon_max,lat_min,lat_max the area is (lon_max - lon_min)*(sin(lat_max) - sin(lat_min)), when lat is given in radians.
   # We thus just may convert lats into sin(lats), and then calculate areas of rectangles. (This is a one-to-one mapping, since the angle is between -90 and +90 degree, where sin is increasing).
-  # Also note that we do not need to be dx and dy to be consistent (which would require to convert dx into proper angle distances...),
-  # because we ultimately do not care about the area of overlap, but only about the fraction of overlap, like, (area of overlap)/(unit area).
+  # Also note that we do not need dx and dy to be compatible (which would require to convert dx into proper angle distances...),
+  # because we ultimately do not care about the AREA of overlap, but only about the FRACTION of overlap, like, (area of overlap)/(unit area), see below.
 
   # convert lats to sin(lats):
   matched_grids[,c('fg_lat_min','fg_lat_max','cg_lat_min','cg_lat_max') := lapply(.SD,function(x) sin(pi*x/180)),.SDcols = c('fg_lat_min','fg_lat_max','cg_lat_min','cg_lat_max')]
@@ -243,7 +245,11 @@ upscale_regular_lon_lat = function(dt,
   setkeyv(dt,save_key_dt)
 
   # take the weighted average for upscaling:
-  ret_dt = ret_dt[,lapply(.SD,FUN = mean,na.rm = T),.SDcols = uscols,by = c(bycols,'cg_lon','cg_lat')]
+  ret_dt= ret_dt[!is.na(get(uscols[1]))] # remove missing values before taking weighted means: The function stats::weighted.means has three if-queries, making it probably pretty slow. Using sum with na.rm=TRUE is the fast alternative,
+                                         # but if you do that without removing the missing values first, coarse grid cells that do not overlap with a single fine grid cells get the value 0 rather than NA.
+
+  ret_dt = ret_dt[,lapply(.SD,FUN = function(x) sum(area_contr*x,na.rm = T)),.SDcols = uscols,by = c(bycols,'cg_lon','cg_lat')]
+
 
   setnames(ret_dt,c('cg_lon','cg_lat'),c('lon','lat'))
   return(ret_dt)

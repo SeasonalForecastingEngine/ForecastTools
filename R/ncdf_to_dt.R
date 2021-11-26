@@ -1,8 +1,8 @@
 
 #' function for converting netcdfs to long data tables.
 #'
-#' @description This function crashes when the netcdf has 'empty' dimension variables that are not used by any variable.
-#' This is the case for some netcdfs provided by ICPAC and CORDEX. The new version \code{netcdf_to_dt} overcomes this problem
+#' @description This function is deprecated, use netcdf_to_dt instead. It crashes when the netcdf has 'empty' dimension variables that are not used by any variable.
+#' This is the case for some netcdfs provided by ICPAC and CORDEX.
 #'
 #' @param nc either character string with the name of the .nc file (including path), or an object of type ncdf4
 #' @param subset_list named list for subsetting. The names must match dimension names of the nc file. The range of the vector contained on each page defines which subset of the data is read out.
@@ -188,6 +188,12 @@ netcdf_to_dt = function(nc, vars = NULL,
   for(var in vars)
   {
     v = nc$var[[var]]
+    if(v$ndims == 0)
+    {
+      warning(paste0('The variable ',v$name,' has no dimensions and is skipped.'))
+      next
+    }
+
     units = c(units, paste0(v$name,': ',v$units))
 
     # subsetting:
@@ -286,14 +292,14 @@ netcdf_to_dt = function(nc, vars = NULL,
 
 #' function for writing netcdfs from long data tables.
 #'
-#' @description currently does not support writing netcdfs with multiple variables that have different dimension variables!
+#' @description currently does not support writing netcdfs with multiple variables that have different sets of dimension variables!
 #'
 #'
 #' @param dt a data.table
 #' @param vars names of columns in dt containing variables.
 #' @param units character vector containing the units for vars (in the same order). If this is NULL (default), the user is prompted for input.
 #' @param dim_vars names of columns in dt containing dimension variables.
-#' @param dim_var_units character vector containing the units for dim_vars (in the same order). If this is NULL (default), the user is prompted for input, except for lon/lat, which is filled in automatically.
+#' @param dim_var_units character vector containing the units for dim_vars (in the same order). If this is NULL (default), the user is prompted for input (except for lon/lat).
 #' @param nc_out (path and) file name of the netcdf to write
 #'
 #' @return none.

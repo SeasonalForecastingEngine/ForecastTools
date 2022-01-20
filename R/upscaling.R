@@ -239,7 +239,7 @@ upscale_regular_lon_lat = function(dt,
 
   # now, matched grids contains the weights for the weighted averages, and we can merge with the original data table:
   setnames(matched_grids,c('cg_index','cg_lon','cg_lat','fg_index','lon','lat','area_contr'))
-  ret_dt = merge(dt,matched_grids,c('lon','lat'))
+  ret_dt = merge(dt,matched_grids,c('lon','lat'),allow.cartesian = TRUE)
 
   # return dt to its original key
   setkeyv(dt,save_key_dt)

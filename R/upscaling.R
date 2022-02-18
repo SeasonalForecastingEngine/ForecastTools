@@ -28,6 +28,7 @@
 #' @param coarse_grid data table containing lons/lats of the grid you want to upscale to.
 #' @param uscols column name(s) of the data you want to upscale (can take multiple columns at once, but assumes that the different columns have missing values at the same position).
 #' @param bycols optional column names for grouping if you have repeated data on the same grid, e.g. use bycols = 'date' if your data table contains observations for many dates on the same grid (and the column specifying the date is in fact called 'date').
+#' @param save_weights optional file name for saving the weights for upscaling.
 #' @param tol tolerance parameter used for grid matching, in order to deal with rounding errors present in the coordinates. The gridpoint areas are calculated with this precision, so the output has errors of this order of magnitude.
 #'
 #' @export
@@ -36,6 +37,7 @@ upscale_regular_lon_lat = function(dt,
                                    coarse_grid,
                                    uscols,
                                    bycols = NULL,
+                                   save_weights = NULL,
                                    tol = 1e-5)
 {
   save_key_dt = key(dt)
@@ -239,6 +241,9 @@ upscale_regular_lon_lat = function(dt,
 
   # now, matched grids contains the weights for the weighted averages, and we can merge with the original data table:
   setnames(matched_grids,c('cg_index','cg_lon','cg_lat','fg_index','lon','lat','area_contr'))
+
+  if(!is.null(save_weights)) fwrite(matched_grids, file = save_weights)
+
   ret_dt = merge(dt,matched_grids,c('lon','lat'),allow.cartesian = TRUE)
 
   # return dt to its original key

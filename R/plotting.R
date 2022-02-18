@@ -22,6 +22,7 @@
 #' since they're adjusted to be 'nice'), or by specifying the breaks explicitly (which is often tedious). This gives you a third option, namely specifying how far the breaks
 #' should be apart, and specifying the centerpoint for one of the bins (default is midpoint, or the center of rr if midpoint is not provided). For example, if your color scale shows
 #' percentages and you'd like 4 categories, ranging from white to red, this is easiest achieved by \code{binwidth = 25, midpoint = 12.5}.
+#' @param pointsize Only use this when your spatial grid is not regular in lon/lat (e.g. for raster files in utm coordinates). Then you can specify a size for the points that the function will paint here.
 #'
 #' @return a ggplot object.
 #'
@@ -129,8 +130,9 @@ ggplot_dt = function(dt,
 
 
   ### plotting ###
+
   pp = ggplot(data = dt_sm) +
-    geom_raster(aes(x = lon,y = lat, fill = get(data_col))) +            # add data plot
+    geom_raster(aes(x = lon,y = lat, fill = get(data_col))) +
     geom_polygon(data = world_map,
                  mapping = aes(x = long,y = lat,group = group),
                  color = 'black',fill = NA,size=0.25)  +               # add map
@@ -149,6 +151,7 @@ ggplot_dt = function(dt,
 
   return(pp)
 }
+
 
 
 

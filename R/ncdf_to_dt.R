@@ -287,6 +287,8 @@ netcdf_to_dt = function(nc, vars = NULL,
     cat(catout)
   }
 
+  nc_close(nc)
+
   return(dt_list)
 }
 
@@ -300,7 +302,8 @@ netcdf_to_dt = function(nc, vars = NULL,
 #' @param units character vector containing the units for vars (in the same order). If this is NULL (default), the user is prompted for input.
 #' @param dim_vars names of columns in dt containing dimension variables.
 #' @param dim_var_units character vector containing the units for dim_vars (in the same order). If this is NULL (default), the user is prompted for input (except for lon/lat).
-#' @param nc_out (path and) file name of the netcdf to write
+#' @param nc_out (path and) file name of the netcdf to write.
+#' @param check Only used when a file with the given name already exists. Default is to prompt user for input. This can be avoided (e.g. if you automatically want to overwrite a lot of files) by setting check = 'y'.
 #'
 #' @return none.
 #'
@@ -314,7 +317,7 @@ netcdf_to_dt = function(nc, vars = NULL,
 
 dt_to_netcdf = function(dt,vars,units = NULL,
                         dim_vars = intersect(c('lon','lat','time'),names(dt)), dim_var_units = NULL,
-                        nc_out)
+                        nc_out, check = NULL)
 {
   # get data into correct order:
   setkeyv(dt,rev(dim_vars))
@@ -379,7 +382,10 @@ dt_to_netcdf = function(dt,vars,units = NULL,
   {
     nc = nc_create(filename = nc_out,vars = c(vars_ncdf))
   } else {
+    if(is.null(check))
+    {
     check = readline(prompt = paste0('The netcdf file already exists. Do you want to overwrite? [y/n]'))
+    }
     if(check == 'y') {
       file.remove(nc_out)
       nc = nc_create(filename = nc_out,vars = c(vars_ncdf))

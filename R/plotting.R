@@ -254,68 +254,67 @@ plot_smooth = function(dt_plot,
                        legend = TRUE)
 { # sometimes lat and lon are given with lowercase letters:
 
-  dt = copy(dt_plot)
-
-  if('lat' %in% colnames(dt)){
-    dt[,Lat:=lat][,Lon:=lon]
-  }
-  if(any(dt[, Lon] > 180)){
-    dt[Lon > 180, Lon := Lon - 360]
-  }
-
-
-  dt[Lon > 180, Lon := Lon-360]
-
-  ## prepare data table
-  if("year" %in% colnames(dt)){
-    if("month" %in% colnames(dt)){
-      dt = dt[year == min(year)][month == min(month),.SD,.SDcols = c('Lon','Lat',var)][order(Lat,Lon)]
-    }else{
-      dt = dt[year == min(year),.SD,.SDcols = c('Lon','Lat',var)][order(Lat,Lon)]
+    dt = copy(dt_plot)
+    
+    if('lat' %in% colnames(dt)){
+        dt[,Lat:=lat][,Lon:=lon]
     }
-  }else{
-    dt = dt[,.SD,.SDcols = c('Lon','Lat',var)][order(Lat,Lon)]
-  }
+    if(any(dt[, Lon] > 180)){
+        dt[Lon > 180, Lon := Lon - 360]
+    }
+    
+    
+    dt[Lon > 180, Lon := Lon-360]
+    
+    ## prepare data table
+    if("year" %in% colnames(dt)){
+        if("month" %in% colnames(dt)){
+            dt = dt[year == min(year)][month == min(month),.SD,.SDcols = c('Lon','Lat',var)][order(Lat,Lon)]
+        }else{
+            dt = dt[year == min(year),.SD,.SDcols = c('Lon','Lat',var)][order(Lat,Lon)]
+        }
+    }else{
+        dt = dt[,.SD,.SDcols = c('Lon','Lat',var)][order(Lat,Lon)]
+    }
+    
+    dt = squarify(dt)
+    ##--- create image ---
 
-  dt = squarify(dt)
-  ##--- create image ---
+    x = dt[,.(Lon,Lat)]
+    setnames(x,c("Lon","Lat"), c("lon","lat"))
 
+    Lons = unique(dt[,Lon])
+    Lats = unique(dt[,Lat])
 
-  x = dt[,.(Lon,Lat)]
-  setnames(x,c("Lon","Lat"), c("lon","lat"))
+    n_lon = length(Lons)
+    n_lat = length(Lats)
 
-  Lons = unique(dt[,Lon])
-  Lats = unique(dt[,Lat])
+    A = matrix(dt[[3]],  n_lon, n_lat)
 
-  n_lon = length(Lons)
-  n_lat = length(Lats)
+    im_0 = fields::image.smooth(fields::as.image(A,x = x,nx = pixels,ny = pixels),theta = theta)
 
-  A = matrix(dt[[3]],  n_lon, n_lat)
+    ## Find the points that fall over land
+    
+##    if(!exists("wrld_simpl")) data(wrld_simpl, package = 'maptools')
 
-  im_0 = fields::image.smooth(fields::as.image(A,x = x,nx = pixels,ny = pixels),theta = theta)
+    all_loc = expand.grid(lat = im_0$x,lon = im_0$y)
+##    pts <- sp::SpatialPoints(all_loc, proj4string=sp::CRS(sp::proj4string(wrld_simpl)))
+##    ii <- !is.na(sp::over(pts, wrld_simpl)$FIPS)
+##    if(exclude_land){
+##        im_0$z[ii] = NA
+##    }
+##    if(exclude_ocean){
+##        im_0$z[-which(ii)] = NA
+##    }
 
-  ## Find the points that fall over land
-
-  if(!exists("wrld_simpl")) data(wrld_simpl, package = 'maptools')
-
-  all_loc = expand.grid(lat = im_0$x,lon = im_0$y)
-  pts <- sp::SpatialPoints(all_loc, proj4string=sp::CRS(sp::proj4string(wrld_simpl)))
-  ii <- !is.na(sp::over(pts, wrld_simpl)$FIPS)
-  if(exclude_land){
-    im_0$z[ii] = NA
-  }
-  if(exclude_ocean){
-    im_0$z[-which(ii)] = NA
-  }
-
-  ## --- fix range of plot and fill in values for points out of range ---
-  if(is.null(rr)){
-    rr = range(im_0$z,na.rm=TRUE)
-  }else{
-    im_0$z[im_0$z< min(rr)] = min(rr)
-    im_0$z[im_0$z> max(rr)] = max(rr)
-  }
-
+    ## --- fix range of plot and fill in values for points out of range ---
+    if(is.null(rr)){
+        rr = range(im_0$z,na.rm=TRUE)
+    }else{
+        im_0$z[im_0$z< min(rr)] = min(rr)
+        im_0$z[im_0$z> max(rr)] = max(rr)
+    }
+    
   ## --- Get the symmetric color scaling ---
   brk = seq(rr[1],rr[2],length = 500)
   if(all(brk < 0)){

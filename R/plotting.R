@@ -231,7 +231,6 @@ squarify = function(dt, var = names(dt)[3])
 #'
 #' @importFrom fields as.image designer.colors image.plot image.smooth
 #' @importFrom maps map
-#' @import maptools
 #' @importFrom sp CRS over proj4string SpatialPoints
 
 
